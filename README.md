@@ -35,6 +35,8 @@ Prerequisites:
 ```
 git clone https://github.com/K0nz/LeitorEPUB.git
 cd LeitorEPUB
+dotnet restore
+dotnet build
 dotnet run
 ```
 
