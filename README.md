@@ -24,7 +24,7 @@ Download the latest version from the Releases page.
 
 Requirements:
 - Windows 10 or 11 (64-bit)
-- No .NET installation needed
+- .NET 10 Runtime (download at https://dotnet.microsoft.com/download/dotnet/10.0)
 - Windows TTS voices (included by default)
 
 ## Build from Source
