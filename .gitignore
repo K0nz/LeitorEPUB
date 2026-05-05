@@ -1,0 +1,15 @@
+/.vscode
+/build
+/code.sln
+/dist
+/leitor-epub-legado
+/MainWindow.xaml
+/ofxcleaner.py
+/ofxcleaner.spec
+/preferences.json
+/progress.json
+bin/
+obj/
+*.user
+publicacao/
+.vs/
