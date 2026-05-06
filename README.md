@@ -33,15 +33,6 @@ Windows includes basic SAPI voices by default. To unlock more natural voices, an
 
 This free tool registers the modern Windows Natural Voices (OneCore) into the legacy SAPI system, making them available in Leitor EPUB and any other SAPI-compatible application.
 
-### How to install NaturalVoiceSAPIAdapter:
-
-1. Download the latest release from https://github.com/gexgd0419/NaturalVoiceSAPIAdapter/releases
-2. Run `NaturalVoiceSAPIAdapter.exe`
-3. Click **"Register All"** to register all available natural voices
-4. Restart Leitor EPUB
-
-Now Francisca, Aria, and other natural voices will appear in the voice selection dialog.
-
 ## How to Use
 
 1. Open **File > Open EPUB** and select your `.epub` file
