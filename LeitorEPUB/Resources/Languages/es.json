@@ -1,47 +1,42 @@
 {
-    "title": "Lector EPUB con Voz IA",
-    "ready": "Listo para abrir un libro",
+  "menu": {
+    "file": "Archivo",
     "open_epub": "Abrir EPUB",
+    "close_epub": "Cerrar EPUB",
+    "exit": "Salir",
+    "settings": "Configuración",
+    "about": "Acerca de"
+  },
+  "settings": {
+    "voice": "Voz",
+    "language": "Idioma",
+    "theme": "Tema",
+    "speed": "Velocidad"
+  },
+  "themes": {
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema"
+  },
+  "toolbar": {
     "play": "Reproducir",
-    "pause": "Pausa",
+    "pause": "Pausar",
     "previous": "Anterior",
     "next": "Siguiente",
-    "menu": "Menu",
-    "file": "Archivo",
-    "language": "Idioma",
-    "delete_data": "Eliminar Datos",
-    "delete_data_msg": "Desea eliminar todos los datos de progreso de lectura? Esta accion no se puede deshacer.",
-    "delete_data_title": "Eliminar Datos",
-    "data_deleted": "Todos los datos de lectura han sido eliminados.",
-    "theme": "Tema",
-    "theme_light": "Claro",
-    "theme_dark": "Oscuro",
-    "theme_system": "Sistema",
-    "about": "Acerca de",
-    "about_text": "Lector EPUB con Voz IA\n\nUn lector EPUB gratuito y de codigo abierto (FOSS) con capacidad de texto a voz usando voces de IA.\n\nAutor: K0nz\nLicencia: MIT\n\nEste software es libre y de codigo abierto.",
-    "about_title": "Acerca de",
-    "end_of_book": "Has llegado al final del libro!",
-    "end_title": "Fin",
-    "no_content": "No se encontro contenido en el EPUB.",
-    "error": "Error",
-    "warning": "Advertencia",
-    "info": "Informacion",
-    "restored_progress": "Progreso restaurado: parrafo {0}/{1}",
-    "progress_title": "Progreso",
-    "first_paragraph": "Ya estas en el primer parrafo.",
-    "last_paragraph": "Ya estas en el ultimo parrafo.",
-    "paragraph_position": "Parrafo {0}/{1} ({2:F1}%) - {3}",
-    "voice_changed": "Voz cambiada a: {0}",
-    "speed_changed": "Velocidad: {0:F2}x",
-    "reading": "Leyendo...",
-    "paused": "Pausado",
-    "end_status": "Fin del libro",
-    "no_voice": "Motor de voz no disponible.",
-    "load_error": "Error al cargar EPUB: {0}",
-    "toc_title": "Indice",
-    "book_progress": "{0} - {1} parrafos",
+    "chapters": "Capítulos",
+    "close_book_tooltip": "Cierra el libro actual manteniendo el lector abierto"
+  },
+  "dialogs": {
     "select_voice": "Seleccionar Voz",
-    "voice": "Voz",
-    "speed": "Velocidad",
-    "settings": "Configuracion"
+    "choose_voice": "Elija una voz para la lectura:",
+    "filter": "Filtrar voces:",
+    "voice_language_mismatch": "El idioma del libro ({0}) es diferente de la voz seleccionada ({1}). ¿Desea usar una voz en {0}?",
+    "no_compatible_voice": "No se encontró una voz compatible para el idioma {0}.",
+    "voice_changed_auto": "Voz cambiada automáticamente a {0} (idioma del libro: {1})."
+  },
+  "messages": {
+    "no_book_open": "Ningún libro abierto. Use Archivo > Abrir EPUB para comenzar.",
+    "save_before_exit": "¿Desea guardar el progreso antes de salir?",
+    "book_closed": "Libro cerrado exitosamente.",
+    "about_text": "Lector EPUB con Voz\n\nVersión 1.1.0\n\nUn lector EPUB gratuito y de código abierto con texto a voz usando voces instaladas en Windows.\n\nLicencia MIT"  }
 }

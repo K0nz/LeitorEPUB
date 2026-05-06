@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace LeitorEPUB.Helpers;
 
@@ -33,11 +34,55 @@ public class LanguageHelper
         if (File.Exists(path))
         {
             var json = File.ReadAllText(path);
-            var data = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-            if (data != null)
+            var token = JToken.Parse(json);
+            
+            if (token is JObject jObject)
             {
-                _strings = data;
-                _currentLanguage = languageCode;
+                // Verifica se é formato hierárquico (tem objetos aninhados) ou plano
+                bool isHierarchical = false;
+                foreach (var prop in jObject.Properties())
+                {
+                    if (prop.Value is JObject)
+                    {
+                        isHierarchical = true;
+                        break;
+                    }
+                }
+                
+                if (isHierarchical)
+                {
+                    // Formato hierárquico: achata as chaves
+                    _strings = new Dictionary<string, string>();
+                    FlattenJson(jObject, "");
+                }
+                else
+                {
+                    // Formato plano (compatível com versão anterior)
+                    var data = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+                    if (data != null)
+                    {
+                        _strings = data;
+                    }
+                }
+            }
+            
+            _currentLanguage = languageCode;
+        }
+    }
+
+    private void FlattenJson(JObject obj, string prefix)
+    {
+        foreach (var property in obj.Properties())
+        {
+            var key = string.IsNullOrEmpty(prefix) ? property.Name : $"{prefix}_{property.Name}";
+            
+            if (property.Value is JObject nestedObj)
+            {
+                FlattenJson(nestedObj, key);
+            }
+            else if (property.Value is JValue jValue)
+            {
+                _strings[key] = jValue.Value?.ToString() ?? "";
             }
         }
     }

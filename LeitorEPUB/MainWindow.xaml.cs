@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private readonly Helpers.LanguageHelper _lang = new();
     private bool _tocOpen;
     private string _theme = "system";
+    private double _currentSpeed = 1.0;
+    private static readonly double[] Speeds = { 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00 };
 
     private static readonly Dictionary<string, string> LanguageToTtsCode = new()
     {
@@ -32,6 +34,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         
+        // Eventos do TTS
         _tts.ReadingUpdate += i => Dispatcher.Invoke(() => 
         { 
             _epub.GlobalIndex = i; 
@@ -41,10 +44,11 @@ public partial class MainWindow : Window
         
         _tts.ReadingEnded += () => Dispatcher.Invoke(() => 
         { 
-            PlayButton.Content = _lang.T("play");
+            PlayButton.Content = _lang.T("toolbar_play");
             MessageBox.Show(_lang.T("end_of_book"), _lang.T("end_title")); 
         });
         
+        // Atalho: Espaço para Play/Pause
         KeyDown += (s, e) => 
         { 
             if (e.Key == Key.Space) 
@@ -54,6 +58,17 @@ public partial class MainWindow : Window
             } 
         };
         
+        // Atalho: Ctrl+W para Fechar EPUB
+        KeyDown += (s, e) =>
+        {
+            if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                CloseEpub_Click(null!, null!);
+                e.Handled = true;
+            }
+        };
+        
+        // Salvar progresso ao fechar
         this.Closing += (s, e) =>
         {
             _tts.Stop();
@@ -63,6 +78,7 @@ public partial class MainWindow : Window
             }
         };
         
+        // Carregar configurações
         _theme = _settings.Preferences["theme"]?.ToString() ?? "system";
         ThemeService.ApplyTheme(_theme);
         
@@ -71,71 +87,144 @@ public partial class MainWindow : Window
         
         var ttsLang = LanguageToTtsCode.ContainsKey(langCode) ? LanguageToTtsCode[langCode] : "pt";
         _tts.SelectVoiceForLanguage(ttsLang);
-        var voice = _settings.Preferences["voice"]?.ToString();
-        if (!string.IsNullOrEmpty(voice)) _tts.SetVoiceByDescription(voice);
         
-        // Construir menu de voz dinâmico
-        MenuVoice.SubmenuOpened += (s, e) => BuildVoiceMenu();
+        var savedVoice = _settings.Preferences["voice"]?.ToString();
+        if (!string.IsNullOrEmpty(savedVoice))
+        {
+            _tts.SetVoiceByDescription(savedVoice);
+        }
         
         Loaded += (s, e) =>
         {
-            BuildVoiceMenu();
             ThemeService.ApplyTitleBarTheme(this);
+            InitSpeed();
             RefreshAllUI();
+            UpdateControlsState();
         };
-        
+    }
+
+    // ============================================================
+    // VELOCIDADE
+    // ============================================================
+
+    private void InitSpeed()
+    {
+        double savedSpeed = 1.0;
         if (_settings.Preferences.ContainsKey("speed"))
         {
-            var savedSpeed = Convert.ToDouble(_settings.Preferences["speed"]);
-            _tts.SetSpeed(savedSpeed);
-            var speeds = new[] { 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00 };
-            var idx = Array.IndexOf(speeds, savedSpeed);
-            if (idx >= 0) SpeedSelector.SelectedIndex = idx;
+            var speedObj = _settings.Preferences["speed"];
+            if (speedObj != null)
+            {
+                try { savedSpeed = Convert.ToDouble(speedObj); }
+                catch { savedSpeed = 1.0; }
+            }
+        }
+        _currentSpeed = savedSpeed;
+        _tts.SetSpeed(_currentSpeed);
+        UpdateSpeedDisplay();
+    }
+
+    private void UpdateSpeedDisplay()
+    {
+        SpeedValue.Text = _currentSpeed.ToString("0.00x");
+    }
+
+    private void SpeedMinus_Click(object sender, RoutedEventArgs e)
+    {
+        var idx = Array.IndexOf(Speeds, _currentSpeed);
+        if (idx > 0)
+        {
+            idx--;
+            _currentSpeed = Speeds[idx];
+            ApplySpeedChange();
         }
     }
+
+    private void SpeedPlus_Click(object sender, RoutedEventArgs e)
+    {
+        var idx = Array.IndexOf(Speeds, _currentSpeed);
+        if (idx < Speeds.Length - 1)
+        {
+            idx++;
+            _currentSpeed = Speeds[idx];
+            ApplySpeedChange();
+        }
+    }
+
+    private void ApplySpeedChange()
+    {
+        _tts.SetSpeed(_currentSpeed);
+        _settings.Preferences["speed"] = _currentSpeed;
+        _settings.SavePreferences();
+        UpdateSpeedDisplay();
+        
+        if (_tts.IsPlaying && !_tts.IsPaused)
+        {
+            _tts.Stop();
+            _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex);
+            PlayButton.Content = _lang.T("toolbar_pause");
+        }
+    }
+
+    // ============================================================
+    // MÉTODOS DE INTERFACE (UI)
+    // ============================================================
 
     private void RefreshAllUI()
     {
         // Menu Arquivo
-        MenuFile.Header = _lang.T("file");
-        MenuOpen.Header = _lang.T("open_epub");
-        MenuDelete.Header = _lang.T("delete_data");
-        MenuExit.Header = "Sair"; // não tem no JSON
-        
+        MenuFile.Header = _lang.T("menu_file");
+        MenuOpen.Header = _lang.T("menu_open_epub");
+        MenuCloseEpub.Header = _lang.T("menu_close_epub");
+        MenuDelete.Header = _lang.T("menu_delete_data") != "menu_delete_data" ? _lang.T("menu_delete_data") : "Apagar Dados";
+        MenuExit.Header = _lang.T("menu_exit");
+
         // Menu Configurações
-        MenuSettings.Header = _lang.T("settings");
-        MenuLanguage.Header = _lang.T("language");
-        MenuVoice.Header = _lang.T("voice");
-        MenuTheme.Header = _lang.T("theme");
-        ThemeLight.Header = _lang.T("theme_light");
-        ThemeDark.Header = _lang.T("theme_dark");
-        ThemeSystem.Header = _lang.T("theme_system");
+        MenuSettings.Header = _lang.T("menu_settings") != "menu_settings" ? _lang.T("menu_settings") : "Configurações";
+        MenuLanguage.Header = _lang.T("settings_language");
+        MenuVoice.Header = _lang.T("settings_voice") != "settings_voice" ? _lang.T("settings_voice") : "Voz";
+        MenuTheme.Header = _lang.T("settings_theme");
         
+        // Submenu Tema
+        ThemeLight.Header = _lang.T("themes_light") != "themes_light" ? _lang.T("themes_light") : "Claro";
+        ThemeDark.Header = _lang.T("themes_dark") != "themes_dark" ? _lang.T("themes_dark") : "Escuro";
+        ThemeSystem.Header = _lang.T("themes_system") != "themes_system" ? _lang.T("themes_system") : "Sistema";
+
         // Menu Sobre
-        MenuAbout.Header = _lang.T("about");
-        
+        MenuAbout.Header = _lang.T("menu_about") != "menu_about" ? _lang.T("menu_about") : "Sobre";
+
         // Botões
-        PrevButton.Content = _lang.T("previous");
-        NextButton.Content = _lang.T("next");
-        
+        PrevButton.Content = _lang.T("toolbar_previous");
+        NextButton.Content = _lang.T("toolbar_next");
+        TocButton.ToolTip = _lang.T("toolbar_chapters");
+
         // Play/Pause
         if (_tts.IsPlaying && !_tts.IsPaused)
-            PlayButton.Content = _lang.T("pause");
+            PlayButton.Content = _lang.T("toolbar_pause");
         else
-            PlayButton.Content = _lang.T("play");
-        
+            PlayButton.Content = _lang.T("toolbar_play");
+
         // Velocidade
-        SpeedLabel.Text = _lang.T("speed") + ":";
-        
+        SpeedLabel.Text = _lang.T("settings_speed") + ":";
+        UpdateSpeedDisplay();
+
         // Índice
-        TocTitle.Text = _lang.T("toc_title");
-        
+        TocTitle.Text = _lang.T("toolbar_chapters");
+
         // Status
         if (_epub.HasContent())
             UpdateStatusText();
         else
-            StatusText.Text = _lang.T("ready");
-        
+            StatusText.Text = _lang.T("messages_no_book_open") != "messages_no_book_open"
+                ? _lang.T("messages_no_book_open")
+                : "Pronto";
+
+        // Título do livro na barra superior
+        if (!_epub.HasContent())
+            BookTitle.Text = _lang.T("messages_no_book_open") != "messages_no_book_open"
+                ? _lang.T("messages_no_book_open")
+                : "Nenhum livro aberto";
+
         // Atualizar checks dos idiomas
         var currentLang = _settings.Preferences["language"]?.ToString() ?? "pt";
         Lang_pt.IsChecked = (currentLang == "pt");
@@ -152,6 +241,19 @@ public partial class MainWindow : Window
         Lang_ru.IsChecked = (currentLang == "ru");
     }
 
+    private void UpdateControlsState()
+    {
+        bool hasBook = _epub.HasContent();
+        
+        MenuCloseEpub.IsEnabled = hasBook;
+        PrevButton.IsEnabled = hasBook;
+        NextButton.IsEnabled = hasBook;
+        PlayButton.IsEnabled = hasBook;
+        TocButton.IsEnabled = hasBook;
+        SpeedMinus.IsEnabled = hasBook;
+        SpeedPlus.IsEnabled = hasBook;
+    }
+
     private void UpdateStatusText()
     {
         if (_epub.HasContent())
@@ -160,13 +262,20 @@ public partial class MainWindow : Window
             var chapterTitle = ch != null ? ch.Title : "";
             try
             {
-                StatusText.Text = string.Format(
-                    _lang.T("paragraph_position"),
-                    _epub.GlobalIndex + 1,
-                    _epub.GetTotalParagraphs(),
-                    _epub.GetProgressPercentage(),
-                    chapterTitle
-                );
+                var format = _lang.T("paragraph_position");
+                if (format == "paragraph_position")
+                {
+                    StatusText.Text = (_epub.GlobalIndex + 1) + "/" + _epub.GetTotalParagraphs() + " - " + chapterTitle;
+                }
+                else
+                {
+                    StatusText.Text = string.Format(format,
+                        _epub.GlobalIndex + 1,
+                        _epub.GetTotalParagraphs(),
+                        _epub.GetProgressPercentage().ToString("F0") + "%",
+                        chapterTitle
+                    );
+                }
             }
             catch
             {
@@ -176,89 +285,6 @@ public partial class MainWindow : Window
         else
         {
             StatusText.Text = _lang.T("ready");
-        }
-    }
-
-    private void BuildVoiceMenu()
-    {
-        MenuVoice.Items.Clear();
-        var voices = _tts.AvailableVoices;
-        
-        if (voices == null || voices.Count == 0)
-        {
-            MenuVoice.Items.Add(new MenuItem { Header = _lang.T("no_voice"), IsEnabled = false });
-            return;
-        }
-        
-        foreach (var v in voices)
-        {
-            var displayName = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : v.Name;
-            if (string.IsNullOrWhiteSpace(displayName)) continue;
-            
-            var item = new MenuItem
-            {
-                Header = displayName,
-                IsCheckable = true,
-                IsChecked = (_tts.CurrentVoice == v.Description || _tts.CurrentVoice == v.Name),
-                Tag = v
-            };
-            item.Click += VoiceMenuItem_Click;
-            MenuVoice.Items.Add(item);
-        }
-    }
-
-    private void VoiceMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        var menuItem = (MenuItem)sender;
-        var voiceInfo = (VoiceInfo)menuItem.Tag;
-        _tts.SetVoice(voiceInfo);
-        _settings.Preferences["voice"] = voiceInfo.Description ?? voiceInfo.Name;
-        _settings.SavePreferences();
-        
-        foreach (MenuItem item in MenuVoice.Items)
-        {
-            if (item.Tag is VoiceInfo v)
-            {
-                item.IsChecked = (_tts.CurrentVoice == v.Description || _tts.CurrentVoice == v.Name);
-            }
-        }
-    }
-
-    private void OpenEpub_Click(object sender, RoutedEventArgs e)
-    {
-        var d = new OpenFileDialog { Filter = "EPUB|*.epub" };
-        if (d.ShowDialog() == true)
-        {
-            _tts.Stop();
-            PlayButton.Content = _lang.T("play");
-            
-            if (!_epub.LoadBook(d.FileName))
-            {
-                MessageBox.Show(_lang.T("no_content"), _lang.T("error"));
-                return;
-            }
-            
-            BookTitle.Text = Path.GetFileName(d.FileName);
-            
-            var p = _settings.LoadProgress(d.FileName);
-            if (p != null && p.GlobalIndex >= 0 && p.GlobalIndex < _epub.GetTotalParagraphs())
-            {
-                _epub.GlobalIndex = p.GlobalIndex;
-                if (p.Speed > 0)
-                {
-                    _tts.SetSpeed(p.Speed);
-                    var speeds = new[] { 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00 };
-                    var idx = Array.IndexOf(speeds, p.Speed);
-                    if (idx >= 0) SpeedSelector.SelectedIndex = idx;
-                }
-            }
-            else
-            {
-                _epub.GlobalIndex = 0;
-            }
-            
-            ShowParagraph();
-            UpdateStatusText();
         }
     }
 
@@ -305,6 +331,188 @@ public partial class MainWindow : Window
         }), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    // ============================================================
+    // MENU ARQUIVO
+    // ============================================================
+
+    private void OpenEpub_Click(object sender, RoutedEventArgs e)
+    {
+        var d = new OpenFileDialog { Filter = "EPUB|*.epub" };
+        if (d.ShowDialog() == true)
+        {
+            _tts.Stop();
+            PlayButton.Content = _lang.T("toolbar_play");
+            
+            if (!_epub.LoadBook(d.FileName))
+            {
+                MessageBox.Show(_lang.T("no_content"), _lang.T("error"));
+                return;
+            }
+            
+            BookTitle.Text = Path.GetFileName(d.FileName);
+            
+            var p = _settings.LoadProgress(d.FileName);
+            if (p != null && p.GlobalIndex >= 0 && p.GlobalIndex < _epub.GetTotalParagraphs())
+            {
+                _epub.GlobalIndex = p.GlobalIndex;
+                if (p.Speed > 0)
+                {
+                    _currentSpeed = p.Speed;
+                    _tts.SetSpeed(_currentSpeed);
+                    UpdateSpeedDisplay();
+                }
+            }
+            else
+            {
+                _epub.GlobalIndex = 0;
+            }
+            
+            ShowParagraph();
+            UpdateStatusText();
+            UpdateControlsState();
+        }
+    }
+
+    private void CloseEpub_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_epub.HasContent()) return;
+
+        _tts.Stop();
+        PlayButton.Content = _lang.T("toolbar_play");
+
+        if (!string.IsNullOrEmpty(_epub.CurrentFile))
+        {
+            _settings.SaveProgress(_epub.CurrentFile, _epub.GlobalIndex, _epub.GetTotalParagraphs(), _tts.Speed);
+        }
+
+        _epub.CloseBook();
+
+        BookTitle.Text = _lang.T("messages_no_book_open") != "messages_no_book_open" 
+            ? _lang.T("messages_no_book_open") 
+            : "Nenhum livro aberto";
+        Title = "LeitorEPUB";
+        TextArea.Document.Blocks.Clear();
+        StatusText.Text = _lang.T("messages_no_book_open") != "messages_no_book_open" 
+            ? _lang.T("messages_no_book_open") 
+            : "Nenhum livro aberto. Use Arquivo > Abrir EPUB para começar.";
+
+        _tocOpen = false;
+        ChapterPanel.Visibility = Visibility.Collapsed;
+        TocButton.Content = "T";
+        ChapterList.Items.Clear();
+
+        UpdateControlsState();
+    }
+
+    private void DeleteData_Click(object sender, RoutedEventArgs e)
+    {
+        var title = _lang.T("delete_data_title") != "delete_data_title" ? _lang.T("delete_data_title") : "Apagar Dados";
+        var msg = _lang.T("delete_data_msg") != "delete_data_msg" ? _lang.T("delete_data_msg") : "Tem certeza que deseja apagar todos os dados?";
+        
+        if (MessageBox.Show(msg, title, MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            _settings.DeleteAllData();
+    }
+
+    private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+    // ============================================================
+    // MENU CONFIGURAÇÕES > VOZ
+    // ============================================================
+
+    private void MenuVoice_Click(object sender, RoutedEventArgs e)
+    {
+        ShowVoiceDialog();
+    }
+
+    private void ShowVoiceDialog()
+    {
+        var allVoices = new SpeechSynthesizer().GetInstalledVoices()
+            .Select(v => v.VoiceInfo)
+            .Where(v => v != null)
+            .ToList();
+        
+        bool wasPlaying = _tts.IsPlaying;
+        bool wasPaused = _tts.IsPaused;
+        int currentIndex = _epub.GlobalIndex;
+
+        var currentVoice = allVoices.FirstOrDefault(v =>
+            (v.Description ?? v.Name) == _tts.CurrentVoice);
+
+        var dialog = new Views.VoiceSelectionDialog(allVoices, currentVoice)
+        {
+            Owner = this
+        };
+
+        dialog.Title = _lang.T("dialogs_select_voice") != "dialogs_select_voice" 
+            ? _lang.T("dialogs_select_voice") 
+            : "Selecionar Voz";
+        dialog.DialogTitle.Text = _lang.T("dialogs_choose_voice") != "dialogs_choose_voice" 
+            ? _lang.T("dialogs_choose_voice") 
+            : "Escolha uma voz para leitura:";
+        
+        var cancelText = _lang.T("cancel") != "cancel" ? _lang.T("cancel") : "Cancelar";
+        dialog.CancelButton.Content = cancelText;
+
+        if (dialog.ShowDialog() == true && dialog.SelectedVoice != null)
+        {
+            _tts.ChangeVoiceSafe(dialog.SelectedVoice);
+            _settings.Preferences["voice"] = dialog.SelectedVoice.Description ?? dialog.SelectedVoice.Name;
+            _settings.SavePreferences();
+
+            if (wasPlaying && !wasPaused)
+            {
+                _epub.GlobalIndex = currentIndex;
+                _tts.StartReading(_epub.AllParagraphs, currentIndex);
+                PlayButton.Content = _lang.T("toolbar_pause");
+            }
+            else if (wasPlaying && wasPaused)
+            {
+                _epub.GlobalIndex = currentIndex;
+                PlayButton.Content = _lang.T("toolbar_play");
+            }
+        }
+    }
+
+    // ============================================================
+    // MENU CONFIGURAÇÕES > IDIOMA
+    // ============================================================
+
+    private void Language_Click(object sender, RoutedEventArgs e)
+    {
+        var lang = (sender as MenuItem)?.Tag?.ToString();
+        if (!string.IsNullOrEmpty(lang))
+        {
+            _lang.LoadLanguage(lang);
+            _settings.Preferences["language"] = lang;
+            _settings.SavePreferences();
+            
+            RefreshAllUI();
+            UpdateControlsState();
+        }
+    }
+
+    // ============================================================
+    // MENU CONFIGURAÇÕES > TEMA
+    // ============================================================
+
+    private void Theme_Click(object sender, RoutedEventArgs e)
+    {
+        var t = (sender as MenuItem)?.Tag?.ToString();
+        if (t != null)
+        {
+            _theme = t;
+            _settings.Preferences["theme"] = t;
+            _settings.SavePreferences();
+            ThemeService.ApplyTheme(t);
+            ThemeService.ApplyTitleBarTheme(this);
+            ShowParagraph();
+        }
+    }
+
+    // ============================================================
+    // ÍNDICE DE CAPÍTULOS
+    // ============================================================
+
     private void TocToggle_Click(object sender, RoutedEventArgs e)
     {
         _tocOpen = !_tocOpen;
@@ -329,21 +537,28 @@ public partial class MainWindow : Window
         }
     }
 
+    // ============================================================
+    // CONTROLES DE LEITURA
+    // ============================================================
+
     private void PlayButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_epub.HasContent()) return;
+        
         if (_tts.IsPlaying && !_tts.IsPaused)
         {
             _tts.Pause();
-            PlayButton.Content = _lang.T("play");
+            PlayButton.Content = _lang.T("toolbar_play");
+        }
+        else if (_tts.IsPlaying && _tts.IsPaused)
+        {
+            _tts.Resume();
+            PlayButton.Content = _lang.T("toolbar_pause");
         }
         else
         {
-            if (!_tts.IsPlaying)
-                _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex);
-            else
-                _tts.Resume();
-            PlayButton.Content = _lang.T("pause");
+            _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex);
+            PlayButton.Content = _lang.T("toolbar_pause");
         }
     }
 
@@ -353,7 +568,17 @@ public partial class MainWindow : Window
         _epub.GlobalIndex--;
         ShowParagraph();
         UpdateStatusText();
-        if (_tts.IsPlaying) { _tts.Stop(); _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex); PlayButton.Content = _lang.T("pause"); }
+        
+        if (_tts.IsPlaying && !_tts.IsPaused)
+        { 
+            _tts.Stop(); 
+            _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex); 
+            PlayButton.Content = _lang.T("toolbar_pause"); 
+        }
+        else if (_tts.IsPlaying && _tts.IsPaused)
+        {
+            PlayButton.Content = _lang.T("toolbar_play");
+        }
     }
 
     private void NextButton_Click(object sender, RoutedEventArgs e)
@@ -362,62 +587,31 @@ public partial class MainWindow : Window
         _epub.GlobalIndex++;
         ShowParagraph();
         UpdateStatusText();
-        if (_tts.IsPlaying) { _tts.Stop(); _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex); PlayButton.Content = _lang.T("pause"); }
-    }
-
-    private void SpeedSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        var speeds = new[] { 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00 };
-        if (SpeedSelector.SelectedIndex >= 0 && SpeedSelector.SelectedIndex < speeds.Length)
+        
+        if (_tts.IsPlaying && !_tts.IsPaused)
+        { 
+            _tts.Stop(); 
+            _tts.StartReading(_epub.AllParagraphs, _epub.GlobalIndex); 
+            PlayButton.Content = _lang.T("toolbar_pause"); 
+        }
+        else if (_tts.IsPlaying && _tts.IsPaused)
         {
-            var speed = speeds[SpeedSelector.SelectedIndex];
-            _tts.SetSpeed(speed);
-            _settings.Preferences["speed"] = speed;
-            _settings.SavePreferences();
+            PlayButton.Content = _lang.T("toolbar_play");
         }
     }
 
-    private void Language_Click(object sender, RoutedEventArgs e)
-    {
-        var lang = (sender as MenuItem)?.Tag?.ToString();
-        if (!string.IsNullOrEmpty(lang))
-        {
-            _lang.LoadLanguage(lang);
-            _settings.Preferences["language"] = lang;
-            _settings.SavePreferences();
-            
-            var ttsLang = LanguageToTtsCode.ContainsKey(lang) ? LanguageToTtsCode[lang] : "en";
-            _tts.SelectVoiceForLanguage(ttsLang);
-            BuildVoiceMenu();
-            
-            RefreshAllUI();
-        }
-    }
-
-    private void Theme_Click(object sender, RoutedEventArgs e)
-    {
-        var t = (sender as MenuItem)?.Tag?.ToString();
-        if (t != null)
-        {
-            _theme = t;
-            _settings.Preferences["theme"] = t;
-            _settings.SavePreferences();
-            ThemeService.ApplyTheme(t);
-            ThemeService.ApplyTitleBarTheme(this);
-            ShowParagraph();
-        }
-    }
-
-    private void DeleteData_Click(object sender, RoutedEventArgs e)
-    {
-        if (MessageBox.Show(_lang.T("delete_data_msg"), _lang.T("delete_data_title"), MessageBoxButton.YesNo) == MessageBoxResult.Yes)
-            _settings.DeleteAllData();
-    }
-
-    private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+    // ============================================================
+    // MENU SOBRE
+    // ============================================================
 
     private void About_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show(_lang.T("about_text"), _lang.T("about_title"));
+        var title = _lang.T("menu_about") != "menu_about" ? _lang.T("menu_about") : "Sobre";
+        var text = _lang.T("messages_about_text");
+        if (text == "messages_about_text")
+        {
+            text = "Leitor EPUB\n\nVersão 1.1.0\n\nMIT License";
+        }
+        MessageBox.Show(text, title);
     }
 }

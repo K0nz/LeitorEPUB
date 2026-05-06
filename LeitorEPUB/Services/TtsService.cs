@@ -12,6 +12,8 @@ public class TtsService
     private SpeechSynthesizer _synthesizer;
     private CancellationTokenSource? _cts;
     private Task? _readingTask;
+    private volatile bool _stopRequested;
+    private readonly object _lock = new();
 
     public List<VoiceInfo> AvailableVoices { get; private set; } = new();
     public string CurrentVoice { get; private set; } = "";
@@ -43,11 +45,58 @@ public class TtsService
                 .Select(v => v.VoiceInfo)
                 .Where(v => v != null)
                 .ToList();
+            
+            if (AvailableVoices.Count > 0)
+            {
+                _synthesizer.SelectVoice(AvailableVoices[0].Name);
+                CurrentVoice = AvailableVoices[0].Description ?? AvailableVoices[0].Name ?? "Desconhecida";
+            }
         }
         catch
         {
             AvailableVoices = new List<VoiceInfo>();
         }
+    }
+
+    public void ChangeVoiceSafe(VoiceInfo voiceInfo)
+    {
+        lock (_lock)
+        {
+            try { _synthesizer.SpeakAsyncCancelAll(); } catch { }
+            
+            var timeout = DateTime.Now.AddSeconds(3);
+            while (_synthesizer.State != SynthesizerState.Ready && DateTime.Now < timeout)
+                Thread.Sleep(50);
+
+            SetVoiceInternal(voiceInfo);
+            CurrentVoice = voiceInfo.Description ?? voiceInfo.Name ?? "Desconhecida";
+        }
+    }
+
+    public string GetCurrentVoiceLanguageCode()
+    {
+        var voice = AvailableVoices.FirstOrDefault(v => 
+            (v.Description ?? v.Name) == CurrentVoice);
+        
+        if (voice != null)
+        {
+            var lcid = voice.Culture.LCID.ToString("X");
+            return LanguageCodes.FirstOrDefault(kv => kv.Value == lcid).Key ?? "en";
+        }
+        return "en";
+    }
+
+    public string GetCurrentVoiceLanguageName()
+    {
+        var code = GetCurrentVoiceLanguageCode();
+        return code switch
+        {
+            "pt" => "Português", "en" => "English", "es" => "Español",
+            "fr" => "Français", "de" => "Deutsch", "it" => "Italiano",
+            "zh" => "中文", "ja" => "日本語", "ko" => "한국어",
+            "ar" => "العربية", "hi" => "हिन्दी", "ru" => "Русский",
+            _ => code
+        };
     }
 
     public string? SelectVoiceForLanguage(string languageCode)
@@ -94,6 +143,12 @@ public class TtsService
 
     public void SetVoice(VoiceInfo voiceInfo)
     {
+        SetVoiceInternal(voiceInfo);
+        CurrentVoice = voiceInfo.Description ?? voiceInfo.Name ?? "Desconhecida";
+    }
+
+    private void SetVoiceInternal(VoiceInfo voiceInfo)
+    {
         try
         {
             if (!string.IsNullOrEmpty(voiceInfo.Name))
@@ -121,8 +176,6 @@ public class TtsService
                 else
                     _synthesizer.SelectVoiceByHints(voiceInfo.Gender, voiceInfo.Age, 0, voiceInfo.Culture);
             }
-            
-            CurrentVoice = voiceInfo.Description ?? voiceInfo.Name ?? "Desconhecida";
         }
         catch { }
     }
@@ -137,16 +190,28 @@ public class TtsService
         }
         return false;
     }
-
     public void SetSpeed(double speed)
     {
         Speed = Math.Max(0.25, Math.Min(3.0, speed));
-        _synthesizer.Rate = (int)((Speed - 1) * 10);
+        lock (_lock)
+        {
+            try { _synthesizer.Rate = (int)((Speed - 1) * 10); }
+            catch { }
+        }
     }
 
     public void StartReading(List<string> paragraphs, int startIndex)
     {
-        Stop();
+        StopInternal();
+        
+        lock (_lock)
+        {
+            var timeout = DateTime.Now.AddSeconds(2);
+            while (_synthesizer.State != SynthesizerState.Ready && DateTime.Now < timeout)
+                Thread.Sleep(50);
+        }
+        
+        _stopRequested = false;
         IsPlaying = true;
         IsPaused = false;
         _cts = new CancellationTokenSource();
@@ -157,15 +222,13 @@ public class TtsService
     {
         try
         {
-            while (currentIndex < paragraphs.Count && !ct.IsCancellationRequested)
+            while (currentIndex < paragraphs.Count && !ct.IsCancellationRequested && !_stopRequested)
             {
-                if (IsPaused)
-                {
-                    _synthesizer.Pause();
-                    while (IsPaused && !ct.IsCancellationRequested)
-                        await Task.Delay(100, ct);
-                    _synthesizer.Resume();
-                }
+                // Aguarda despausar
+                while (IsPaused && !ct.IsCancellationRequested && !_stopRequested)
+                    await Task.Delay(100, ct);
+                
+                if (ct.IsCancellationRequested || _stopRequested) break;
 
                 var index = currentIndex;
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -174,48 +237,114 @@ public class TtsService
                 var paragraph = paragraphs[currentIndex];
                 if (!string.IsNullOrWhiteSpace(paragraph))
                 {
-                    try 
-                    { 
-                        _synthesizer.Speak(paragraph); 
+                    bool completed = false;
+                    
+                    while (!completed && !ct.IsCancellationRequested && !_stopRequested)
+                    {
+                        var tcs = new TaskCompletionSource<bool>();
+                        EventHandler<SpeakCompletedEventArgs>? handler = null;
+                        handler = (s, e) =>
+                        {
+                            _synthesizer.SpeakCompleted -= handler;
+                            tcs.TrySetResult(true);
+                        };
+                        
+                        lock (_lock)
+                        {
+                            _synthesizer.Rate = (int)((Speed - 1) * 10);
+                            _synthesizer.SpeakCompleted += handler;
+                            _synthesizer.SpeakAsync(paragraph);
+                        }
+                        
+                        // Monitora pausa e stop enquanto fala
+                        while (!tcs.Task.IsCompleted && !ct.IsCancellationRequested && !_stopRequested)
+                        {
+                            if (IsPaused)
+                            {
+                                lock (_lock) { try { _synthesizer.Pause(); } catch { } }
+                                
+                                while (IsPaused && !ct.IsCancellationRequested && !_stopRequested)
+                                    await Task.Delay(100, ct);
+                                
+                                if (!_stopRequested && !ct.IsCancellationRequested)
+                                {
+                                    // Velocidade pode ter mudado durante a pausa
+                                    lock (_lock)
+                                    {
+                                        try
+                                        {
+                                            _synthesizer.Rate = (int)((Speed - 1) * 10);
+                                            _synthesizer.Resume();
+                                        }
+                                        catch { }
+                                    }
+                                }
+                            }
+                            await Task.Delay(100, ct);
+                        }
+                        
+                        if (_stopRequested || ct.IsCancellationRequested)
+                        {
+                            lock (_lock)
+                            {
+                                try { _synthesizer.SpeakAsyncCancelAll(); } catch { }
+                                _synthesizer.SpeakCompleted -= handler;
+                            }
+                            break;
+                        }
+                        
+                        try { await tcs.Task; } catch { }
+                        completed = true;
                     }
-                    catch (OperationCanceledException) { break; }
-                    catch { }
+                    
+                    if (_stopRequested || ct.IsCancellationRequested) break;
                 }
 
                 currentIndex++;
-                await Task.Delay(200, ct);
+                if (currentIndex < paragraphs.Count && !ct.IsCancellationRequested && !_stopRequested)
+                    await Task.Delay(200, ct);
             }
         }
         catch (OperationCanceledException) { }
         finally
         {
-            if (currentIndex >= paragraphs.Count)
+            if (currentIndex >= paragraphs.Count && !_stopRequested)
+            {
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     ReadingEnded?.Invoke());
+            }
             IsPlaying = false;
             IsPaused = false;
+            _stopRequested = false;
         }
     }
 
     public void Pause()
     {
         IsPaused = true;
-        try { _synthesizer.Pause(); } catch { }
     }
 
     public void Resume()
     {
         IsPaused = false;
-        try { _synthesizer.Resume(); } catch { }
+    }
+
+    private void StopInternal()
+    {
+        _stopRequested = true;
+        IsPlaying = false;
+        IsPaused = false;
+        _cts?.Cancel();
+        lock (_lock)
+        {
+            try { _synthesizer.SpeakAsyncCancelAll(); } catch { }
+        }
     }
 
     public void Stop()
     {
-        IsPlaying = false;
-        IsPaused = false;
-        _cts?.Cancel();
-        try { _synthesizer.SpeakAsyncCancelAll(); } catch { }
-        try { _readingTask?.Wait(1000); } catch { }
+        StopInternal();
+        try { _readingTask?.Wait(2000); } catch { }
     }
 
     public void Cleanup()

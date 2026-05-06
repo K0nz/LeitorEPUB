@@ -1,47 +1,43 @@
 {
-    "title": "EPUB-Reader mit KI-Stimme",
-    "ready": "Bereit zum Offnen eines Buches",
-    "open_epub": "EPUB offnen",
+  "menu": {
+    "file": "Datei",
+    "open_epub": "EPUB öffnen",
+    "close_epub": "EPUB schließen",
+    "exit": "Beenden",
+    "settings": "Einstellungen",
+    "about": "Über"
+  },
+  "settings": {
+    "voice": "Stimme",
+    "language": "Sprache",
+    "theme": "Design",
+    "speed": "Geschwindigkeit"
+  },
+  "themes": {
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System"
+  },
+  "toolbar": {
     "play": "Wiedergabe",
     "pause": "Pause",
-    "previous": "Zuruck",
+    "previous": "Zurück",
     "next": "Weiter",
-    "menu": "Menu",
-    "file": "Datei",
-    "language": "Sprache",
-    "delete_data": "Daten Loschen",
-    "delete_data_msg": "Mochten Sie alle Lesefortschrittsdaten loschen? Diese Aktion kann nicht ruckgangig gemacht werden.",
-    "delete_data_title": "Daten Loschen",
-    "data_deleted": "Alle Lesedaten wurden geloscht.",
-    "theme": "Thema",
-    "theme_light": "Hell",
-    "theme_dark": "Dunkel",
-    "theme_system": "System",
-    "about": "Uber",
-    "about_text": "EPUB-Reader mit KI-Stimme\n\nEin kostenloser und quelloffener (FOSS) EPUB-Reader mit Text-zu-Sprache-Funktion mit KI-Stimmen.\n\nAutor: K0nz\nLizenz: MIT\n\nDiese Software ist kostenlos und quelloffen.",
-    "about_title": "Uber",
-    "end_of_book": "Sie haben das Ende des Buches erreicht!",
-    "end_title": "Ende",
-    "no_content": "Kein Inhalt im EPUB gefunden.",
-    "error": "Fehler",
-    "warning": "Warnung",
-    "info": "Information",
-    "restored_progress": "Fortschritt wiederhergestellt: Absatz {0}/{1}",
-    "progress_title": "Fortschritt",
-    "first_paragraph": "Sie sind bereits beim ersten Absatz.",
-    "last_paragraph": "Sie sind bereits beim letzten Absatz.",
-    "paragraph_position": "Absatz {0}/{1} ({2:F1}%) - {3}",
-    "voice_changed": "Stimme geandert zu: {0}",
-    "speed_changed": "Geschwindigkeit: {0:F2}x",
-    "reading": "Lese...",
-    "paused": "Pausiert",
-    "end_status": "Ende des Buches",
-    "no_voice": "Sprach-Engine nicht verfugbar.",
-    "load_error": "Fehler beim Laden des EPUB: {0}",
-    "toc_title": "Inhaltsverzeichnis",
-    "book_progress": "{0} - {1} Absatze",
-    "select_voice": "Stimme Auswahlen",
-    "voice": "Stimme",
-    "speed": "Geschwindigkeit",
-    "settings": "Einstellungen"
+    "chapters": "Kapitel",
+    "close_book_tooltip": "Aktuelles Buch schließen, Reader bleibt geöffnet"
+  },
+  "dialogs": {
+    "select_voice": "Stimme auswählen",
+    "choose_voice": "Wählen Sie eine Stimme zum Lesen:",
+    "filter": "Stimmen filtern:",
+    "voice_language_mismatch": "Die Sprache des Buches ({0}) unterscheidet sich von der ausgewählten Stimme ({1}). Möchten Sie eine Stimme auf {0} verwenden?",
+    "no_compatible_voice": "Keine kompatible Stimme für Sprache {0} gefunden.",
+    "voice_changed_auto": "Stimme automatisch auf {0} geändert (Buchsprache: {1})."
+  },
+  "messages": {
+    "no_book_open": "Kein Buch geöffnet. Verwenden Sie Datei > EPUB öffnen zum Starten.",
+    "save_before_exit": "Möchten Sie den Fortschritt vor dem Beenden speichern?",
+    "book_closed": "Buch erfolgreich geschlossen.",
+    "about_text": "EPUB-Reader mit Stimme\n\nVersion 1.1.0\n\nEin kostenloser Open-Source-EPUB-Reader mit Text-to-Speech unter Verwendung der in Windows installierten Stimmen.\n\nMIT-Lizenz"
+  }
 }
